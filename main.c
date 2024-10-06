@@ -4,7 +4,22 @@
 
 #include <avr/io.h>
 #include <util/delay.h>
-// #include <avr/iotn13.h>
+#include <avr/interrupt.h>
+
+#include "util.h"
+
+
+#define ADDR_TEMPERATURE_90 0
+#define ADDR_TEMPERATURE_100 1
+
+
+void setup_int(void);
+void setup_pwm(void);
+void setup_adc(void);
+
+uint8_t map_temperature_to_duty(uint8_t adc_temperature, uint8_t is_ac_on);
+void set_duty_smoothly(uint8_t duty);
+void calc_adc_temp_borders(void);
 
 const uint8_t temperature_duty_ac_off_map[] = {
     0x00, // <=90 0%
@@ -30,9 +45,82 @@ const uint8_t temperature_duty_ac_on_map[] = {
     0xFF, // >=98 100%
 };
 
-const uint8_t adc_temperature_90 = 150;
-const uint8_t adc_temperature_100 = 50;
-const uint8_t adc_temperature_step = (adc_temperature_90 - adc_temperature_100) / 10;
+uint8_t adc_temperature_90 = 0;
+uint8_t adc_temperature_100 = 0;
+uint8_t adc_temperature_1_deg = 1;
+
+
+volatile uint8_t is_button_pressed = 0;
+volatile uint8_t calibration_number = 0;
+
+ISR (PCINT0_vect) {
+    is_button_pressed = !is_button_pressed;
+
+    if (is_button_pressed) {
+        return;
+    }
+
+    if (!calibration_number) {
+        EEPROM_write(ADDR_TEMPERATURE_90, adc_read());
+        blink_fast();
+    } else {
+        EEPROM_write(ADDR_TEMPERATURE_100, adc_read());
+        blink_slow();
+    }
+    
+    calc_adc_temp_borders();
+
+    calibration_number = !calibration_number;
+}
+
+int main(void) {
+    // set frequency divider 0 (9.6 MGHz)
+    CLKPR = (1 << CLKPCE);
+    CLKPR = 0;
+
+    setup_pwm();
+    setup_adc();
+    setup_int();
+
+    // pwm counter - 0, duty - 0
+    TCNT0 = 0;
+    OCR0A = 0;
+
+    calc_adc_temp_borders();
+
+    while (1)
+    {
+        uint8_t adc_temp = adc_read();
+        uint8_t ac_on = 0;
+
+        uint8_t duty = map_temperature_to_duty(adc_temp, ac_on);
+
+        set_duty_smoothly(duty);
+        // OCR0A = duty;
+
+        // _delay_ms(5000);
+    }
+
+    return 0;
+}
+
+void calc_adc_temp_borders(void) {
+    adc_temperature_90 = EEPROM_read(ADDR_TEMPERATURE_90);
+    adc_temperature_100 = EEPROM_read(ADDR_TEMPERATURE_100);
+    adc_temperature_1_deg = (adc_temperature_90 - adc_temperature_100) / 10;
+}
+
+void setup_int(void) {
+    // PB3 - input
+    DDRB &= ~(1 << DDB3);
+    // pull-up
+    PORTB |= (1 << PB3);
+
+    // int
+    GIMSK |= (1 << PCIE);
+    PCMSK = (1 << PCINT3);
+    SREG |= (1 << SREG_I);
+}
 
 void setup_pwm(void) {
     // PB0 - output
@@ -67,23 +155,15 @@ void setup_adc(void) {
     ADCSRA |= (1 << ADEN);
 }
 
-uint8_t adc_read(void) {
-    // Start the conversion
-    ADCSRA |= (1 << ADSC);
-
-    // Wait for it to finish - blocking
-    while (ADCSRA & (1 << ADSC));
-
-    return ADCH;
-}
-
 uint8_t map_temperature_to_duty(uint8_t adc_temperature, uint8_t is_ac_on) {
     uint8_t duty_index = 0;
 
-    int8_t delta = adc_temperature_90 - adc_temperature;
+    if (adc_temperature < adc_temperature_90) {
+        duty_index = (adc_temperature_90 - adc_temperature) / adc_temperature_1_deg;
+    }
 
-    if (delta > 0) {
-        duty_index = delta / adc_temperature_step;
+    if (duty_index > 8) {
+        duty_index = 8;
     }
 
     if (is_ac_on) {
@@ -105,47 +185,4 @@ void set_duty_smoothly(uint8_t duty) {
         OCR0A++;
         _delay_ms(25);
     }
-}
-
-int main(void) {
-    // set frequency divider 0 (9.6 MGHz)
-    CLKPR = (1 << CLKPCE);
-    CLKPR = 0;
-
-    setup_pwm();
-    setup_adc();
-
-    TCNT0 = 0; // начальное значение счётчика
-    OCR0A = 5; // регистр совпадения A
-
-    while (1)
-    {
-        uint8_t adc_temp = adc_read();
-        uint8_t ac_on = 1;
-
-        uint8_t duty = map_temperature_to_duty(adc_temp, ac_on);
-
-        set_duty_smoothly(duty);
-
-        _delay_ms(5000);
-    }
-
-    // while (1)
-    // {
-    //     while (OCR0A < 255)
-    //     {
-    //         OCR0A++;
-    //         _delay_ms(25);
-    //     }
-    //     _delay_ms(2000);
-
-    //     while (OCR0A > 0)
-    //     {
-    //         OCR0A--;
-    //         _delay_ms(25);
-    //     }
-    //     _delay_ms(2000);
-    // }
-
-    return 0;
 }

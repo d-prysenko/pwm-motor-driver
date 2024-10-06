@@ -4,7 +4,7 @@ OBJCOPY = avr-objcopy -j .text -j .data -O ihex
 
 
 all: 
-	$(GCC) main.c -o main.elf
+	$(GCC) main.c util.c -o main.elf
 	$(OBJCOPY) main.elf main.hex
 
 flash:
