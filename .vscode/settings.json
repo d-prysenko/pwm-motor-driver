@@ -1,9 +1,0 @@
-{
-    "files.associations": {
-        "io.h": "c",
-        "delay.h": "c",
-        "util.h": "c",
-        "interrupt.h": "c"
-    },
-    "C_Cpp.errorSquiggles": "disabled"
-}
