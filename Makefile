@@ -1,10 +1,10 @@
-
-GCC = avr-gcc -Wall -Os -g -mmcu=attiny13a
+# GCC = avr-gcc -Wall -Os -g -mmcu=attiny13a
+GCC = avr-gcc -Wall -Os -Wl,--gc-sections -ffunction-sections -g -mmcu=attiny13a
 OBJCOPY = avr-objcopy -j .text -j .data -O ihex
 
 
 all: 
-	$(GCC) main.c util.c -o main.elf
+	$(GCC) main.c util.c uart.c -o main.elf
 	$(OBJCOPY) main.elf main.hex
 
 flash:

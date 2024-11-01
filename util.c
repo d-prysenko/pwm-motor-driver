@@ -26,30 +26,56 @@ uint8_t EEPROM_read(uint8_t ucAddress) {
     return EEDR;
 }
 
-uint8_t adc_read(void) {
+void EEPROM_write_uint16(uint8_t ucAddress, uint16_t ucData) {
+    EEPROM_write(ucAddress, (uint8_t)(ucData >> 8));
+    EEPROM_write(ucAddress + 1, (uint8_t)(ucData & 0xFF));
+}
+
+uint16_t EEPROM_read_uint16(uint8_t ucAddress) {
+    return ((uint16_t)EEPROM_read(ucAddress) << 8) | EEPROM_read(ucAddress + 1);
+}
+
+uint16_t adc_read(void) {
     // Start the conversion
     ADCSRA |= (1 << ADSC);
 
     // Wait for it to finish - blocking
     while (ADCSRA & (1 << ADSC));
 
-    return ADCH;
+    return ADC;
+}
+
+void __attribute__ ((noinline)) delay_200(void) {
+    _delay_ms(200);
 }
 
 void blink_fast(void) {
+    // PB0_OUTPUT();
+
     for (uint8_t i = 0; i < 7; i++) {
+        // PB0_ON();
         OCR0A = 255;
-        _delay_ms(200);
+        delay_200();
         OCR0A = 0;
-        _delay_ms(200);
+        // PB0_OFF();
+        delay_200();
     }
 }
 
 void blink_slow(void) {
+    // PB2_OUTPUT();
+
     for (uint8_t i = 0; i < 5; i++) {
+        // PB0_ON();
         OCR0A = 255;
-        _delay_ms(700);
+        delay_200();
+        delay_200();
+        delay_200();
+        delay_200();
+        // PB0_OFF();
         OCR0A = 0;
-        _delay_ms(400);
+        delay_200();
+        delay_200();
     }
 }
+
