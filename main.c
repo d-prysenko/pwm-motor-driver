@@ -1,4 +1,4 @@
-#define F_CPU 1200000ul
+#define F_CPU 9600000ul
 
 #define __AVR_ATtiny13__
 
@@ -37,10 +37,11 @@ _inline_ void setup_pwm(void);
 _inline_ void setup_adc(void);
 
 uint8_t map_temperature_to_duty(uint16_t adc_temperature, uint8_t is_ac_on);
-void set_duty_smoothly(uint8_t duty);
+void set_duty_smoothly(uint8_t duty, uint8_t allow_calibration);
 void calc_adc_temp_borders(void);
 void sleep(void);
 void sleep_disable(void);
+void calibrate(void);
 
 const uint8_t temperature_duty_ac_off_map[] PROGMEM = {
     0x00, // <=90 0%
@@ -77,14 +78,17 @@ volatile uint8_t calibration_number = 0;
 
 volatile uint8_t ign_off = 0;
 
-
 #define PWM OCR0A
 
+#define TEN_PERCENT 25
+#define NINTY_PERCENT 230
 
 // PB0 - pwm                 output
 // PB1 - ignition            input
 // PB3 - calibration button  input pull-up
 // PB4 - temperature         input
+
+
 
 // ignition int
 ISR (PCINT0_vect) {
@@ -92,10 +96,52 @@ ISR (PCINT0_vect) {
     // ign_off = 0;
 }
 
+void calibrate(void) {
+    uint16_t temp = adc_read();
+
+    if (!calibration_number) {
+        EEPROM_write_uint16(ADDR_TEMPERATURE_90, temp);
+
+        PWM = 100;
+        _delay_ms(2500);
+        PWM = 0;
+
+        UART_PUTS("90 set ");
+        // blink_fast();
+    } else {
+        EEPROM_write_uint16(ADDR_TEMPERATURE_100, temp);
+
+        SET_CPU_FREQ_DIV_2();
+        PWM = 200;
+        _delay_ms(2500);
+        PWM = 0;
+        SET_CPU_FREQ_DIV_1();
+
+        UART_PUTS("100 set ");
+        // blink_slow();
+    }
+
+    UART_PUTU(temp);
+    UART_PUTC(' ');
+    
+    calc_adc_temp_borders();
+
+    calibration_number = !calibration_number;
+}
+
+void on_calibrate_button_pressed(void) {
+    if (bit_is_clear(PINB, PINB3)) {
+        _delay_ms(10);
+        if (bit_is_clear(PINB, PINB3)) {
+            calibrate();
+        }
+    }
+}
 
 int main(void) {
     // set frequency divider 1 (9.6 MHz)
-    // SET_CPU_FREQ_DIV_1();
+    SET_CPU_FREQ_DIV_1();
+    // SET_CPU_FREQ_DIV_2();
 
     // no pull-ups
     // SET(MCUCR, PUD);
@@ -120,10 +166,18 @@ int main(void) {
 
     const uint8_t afterrun_delay_sec = 10;
 
+    // PWM = TEN_PERCENT;
+
+    // while (1)
+    // {
+    //     set_duty_smoothly(NINTY_PERCENT);
+    //     set_duty_smoothly(TEN_PERCENT);
+    // }
+
     while (1)
     {
         if (ign_off) {
-            set_duty_smoothly(duty);
+            set_duty_smoothly(duty, 0);
             // PWM = duty;
             
             // wait 100 ms for quicker response if ignition will be turned on when doing after run delay
@@ -139,28 +193,6 @@ int main(void) {
             }
         }
 
-        if (bit_is_clear(PINB, PINB3)) {
-
-            uint16_t temp = adc_read();
-
-            if (!calibration_number) {
-                EEPROM_write_uint16(ADDR_TEMPERATURE_90, temp);
-                UART_PUTS("90 set ");
-                blink_fast();
-            } else {
-                EEPROM_write_uint16(ADDR_TEMPERATURE_100, temp);
-                UART_PUTS("100 set ");
-                blink_slow();
-            }
-
-            UART_PUTU(temp);
-            UART_PUTC(' ');
-            
-            calc_adc_temp_borders();
-
-            calibration_number = !calibration_number;
-        }
-
         uint16_t adc_temp = adc_read();
         uint8_t ac_on = 0;
 
@@ -173,8 +205,9 @@ int main(void) {
         UART_PUTC('\r');
 
         // PWM = duty;
-        set_duty_smoothly(duty);
-        
+        on_calibrate_button_pressed();
+        set_duty_smoothly(duty, 1);
+
         _delay_ms(500);
     }
 
@@ -182,10 +215,10 @@ int main(void) {
 }
 
 void calc_adc_temp_borders(void) {
-    // adc_temperature_90 = EEPROM_read_uint16(ADDR_TEMPERATURE_90);
-    // adc_temperature_100 = EEPROM_read_uint16(ADDR_TEMPERATURE_100);
-    adc_temperature_90 = 600;
-    adc_temperature_100 = 10;
+    adc_temperature_90 = EEPROM_read_uint16(ADDR_TEMPERATURE_90);
+    adc_temperature_100 = EEPROM_read_uint16(ADDR_TEMPERATURE_100);
+    // adc_temperature_90 = 600;
+    // adc_temperature_100 = 10;
     adc_temperature_1_deg = (adc_temperature_90 - adc_temperature_100) / 10;
 
     if (adc_temperature_1_deg == 0) {
@@ -206,6 +239,8 @@ void setup_calibration_int(void) {
     // PB3 - input
     PB3_INPUT();
     PB3_PULLUP();
+
+    // SET(PCMSK, PCINT3);
 
     // int0 enable
     // GIMSK |= (1 << INT0);
@@ -281,15 +316,23 @@ void __attribute__ ((noinline)) delay_25ms() {
     _delay_ms(25);
 }
 
-void set_duty_smoothly(uint8_t duty) {
+void set_duty_smoothly(uint8_t duty, uint8_t allow_calibration) {
     while (PWM > duty)
     {
+        if (allow_calibration) {
+            on_calibrate_button_pressed();
+        }
+
         PWM--;
         delay_25ms();
     }
 
     while (PWM < duty)
     {
+        if (allow_calibration) {
+            on_calibrate_button_pressed();
+        }
+
         PWM++;
         delay_25ms();
     }

@@ -1,7 +1,7 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
-#define F_CPU 1200000ul
+#define F_CPU 9600000ul
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -71,6 +71,9 @@
 
 #define SET_CPU_FREQ_DIV_1() CLKPR = (1 << CLKPCE); \
     CLKPR = 0
+
+#define SET_CPU_FREQ_DIV_2() CLKPR = (1 << CLKPCE); \
+    CLKPR = (1 << CLKPS0);
 
 
 #define SET(where, pos) where |= (1 << pos)
