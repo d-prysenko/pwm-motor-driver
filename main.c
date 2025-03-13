@@ -11,6 +11,8 @@
 
 #include "uart.h"
 
+#include "TM1637.h"
+
 
 #define ADDR_TEMPERATURE_90 0
 #define ADDR_TEMPERATURE_100 2
@@ -66,6 +68,8 @@ const uint8_t temperature_duty_ac_on_map[] PROGMEM = {
     0xFF, // 97   100%
     0xFF, // >=98 100%
 };
+
+const uint8_t afterrun_delay_sec = 10;
 
 uint16_t adc_temperature_90 = 100;
 uint16_t adc_temperature_100 = 0;
@@ -150,7 +154,7 @@ int main(void) {
     setup_adc();
     setup_sleep_mode();
     setup_ignition_int();
-    setup_calibration_int();
+    // setup_calibration_int();
 
     // allow interrupts
     sei();
@@ -164,8 +168,6 @@ int main(void) {
 
     calc_adc_temp_borders();
 
-    const uint8_t afterrun_delay_sec = 10;
-
     // PWM = TEN_PERCENT;
 
     // while (1)
@@ -173,6 +175,23 @@ int main(void) {
     //     set_duty_smoothly(NINTY_PERCENT);
     //     set_duty_smoothly(TEN_PERCENT);
     // }
+
+    CLK_OUTPUT();
+    DIO_OUTPUT();
+
+    DIO_ON();
+    CLK_ON();
+
+    while (1)
+    {
+        send_bytes(_1, _2, _3, _4);
+
+        // uint16_t adc_temp = adc_read();
+
+        // uint8_t duty = map_temperature_to_duty(adc_temp, 0);
+
+        _delay_ms(5);
+    }
 
     while (1)
     {
@@ -205,7 +224,7 @@ int main(void) {
         UART_PUTC('\r');
 
         // PWM = duty;
-        on_calibrate_button_pressed();
+        // on_calibrate_button_pressed();
         set_duty_smoothly(duty, 1);
 
         _delay_ms(500);
@@ -319,9 +338,9 @@ void __attribute__ ((noinline)) delay_25ms() {
 void set_duty_smoothly(uint8_t duty, uint8_t allow_calibration) {
     while (PWM > duty)
     {
-        if (allow_calibration) {
-            on_calibrate_button_pressed();
-        }
+        // if (allow_calibration) {
+        //     on_calibrate_button_pressed();
+        // }
 
         PWM--;
         delay_25ms();
@@ -329,9 +348,9 @@ void set_duty_smoothly(uint8_t duty, uint8_t allow_calibration) {
 
     while (PWM < duty)
     {
-        if (allow_calibration) {
-            on_calibrate_button_pressed();
-        }
+        // if (allow_calibration) {
+        //     on_calibrate_button_pressed();
+        // }
 
         PWM++;
         delay_25ms();
