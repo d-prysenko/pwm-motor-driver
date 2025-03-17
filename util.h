@@ -55,19 +55,25 @@
 #define PB4_STATE() (PINB & (1 << PINB4))
 #define PB5_STATE() (PINB & (1 << PINB5))
 
-#define SLEEP_ENABLE()  (MCUCR |= (1 << SE))
-#define SLEEP_DISABLE() (MCUCR &= ~(1 << SE))
+
+#define SET(where, pos) where |= (1 << pos)
+#define UNSET(where, pos) where &= ~(1 << pos)
+
+#define SLEEP_ENABLE()  SET(MCUCR, SE)
+#define SLEEP_DISABLE() UNSET(MCUCR, SE)
 
 
-#define IDLE_SLEEP_MODE() MCUCR &= ~(1 << SM0); \
-    MCUCR &= ~(1 << SM1)
+#define IDLE_SLEEP_MODE() UNSET(MCUCR, SM0); \
+    UNSET(MCUCR, SM1)
 
-#define ADC_NOISE_REDUCTION_SLEEP_MODE() MCUCR |= (1 << SM0); \
-    MCUCR &= ~(1 << SM1)
+#define ADC_NOISE_REDUCTION_SLEEP_MODE() SET(MCUCR, SM0); \
+    UNSET(MCUCR, SM1)
 
-#define POWER_DOWN_SLEEP_MODE() MCUCR &= ~(1 << SM0); \
-    MCUCR |= (1 << SM1)
+#define POWER_DOWN_SLEEP_MODE() UNSET(MCUCR, SM0); \
+    SET(MCUCR, SM1)
 
+#define ADC_NOISE_REDUCTION_SLEEP_MODE_INLINE() SET(MCUCR, SM0)
+#define POWER_DOWN_SLEEP_MODE_INLINE() SET(MCUCR, SM1)
 
 #define SET_CPU_FREQ_DIV_1() CLKPR = (1 << CLKPCE); \
     CLKPR = 0
@@ -76,8 +82,6 @@
     CLKPR = (1 << CLKPS0);
 
 
-#define SET(where, pos) where |= (1 << pos)
-#define UNSET(where, pos) where &= ~(1 << pos)
 
 
 void EEPROM_write(uint8_t ucAddress, uint8_t ucData);

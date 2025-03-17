@@ -2,7 +2,7 @@
 #define	_TM1637_H_
 
 #include "util.h"
-
+#include <avr/pgmspace.h>
 
 #define CMD_DATA_SET 0b01000000
 #define CMD_DATA_SET_FIXED_ADDR 0b01000100
@@ -61,6 +61,18 @@ void __attribute__ ((noinline)) dio_off();
 #define _8 0x7f
 #define _9 0x6f
 
+
+static inline void tm1637_init(void)
+{
+    CLK_OUTPUT();
+    DIO_OUTPUT();
+
+    DIO_ON();
+    CLK_ON();
+}
+
+void send_uint16(uint16_t number, uint8_t with_leading_empty);
+void send_uint16_underscore(uint16_t number);
 void send_bytes(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
 void send_byte(uint8_t a);
 void start(void);

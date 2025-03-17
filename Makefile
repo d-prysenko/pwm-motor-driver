@@ -10,3 +10,4 @@ all:
 flash:
 	avrdude -c usbasp -B 125kHz -p t13 -V -U flash:w:main.hex:i
 	# ..\avrdude\avrdude.exe -c usbasp -B 125kHz -p t13 -U flash:w:main.hex:i
+	# AVRDUDE	-U lfuse:w:0x2A:m	-U hfuse:w:0xFF:m	-U lock:w:0xFF:m

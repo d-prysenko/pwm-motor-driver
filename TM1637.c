@@ -1,5 +1,19 @@
 #include "TM1637.h"
 
+PROGMEM const uint8_t segments[] =
+{
+	_0,
+	_1,
+	_2,
+	_3,
+	_4,
+	_5,
+	_6,
+	_7,
+	_8,
+	_9
+};
+
 void __attribute__ ((noinline)) bit_delay() {
     _delay_us(5);
 }
@@ -25,6 +39,43 @@ void __attribute__ ((noinline)) dio_off() {
     bit_delay();
 }
 
+void send_uint16(uint16_t number, uint8_t with_leading_empty)
+{
+    uint8_t digits[4];
+    
+    for (int8_t i = 0; i < 4; i++) {
+        digits[i] = 0;
+    }
+    
+    for (int8_t i = 0; i < 4; i++) {
+        digits[i] = pgm_read_byte(&segments[number % 10]);
+        number /= 10;
+        if (number == 0 && with_leading_empty) {
+            break;
+        }
+    }
+
+    send_bytes(digits[3], digits[2], digits[1], digits[0]);
+}
+
+void send_uint16_underscore(uint16_t number)
+{
+    uint8_t digits[4];
+    
+    for (int8_t i = 0; i < 4; i++) {
+        digits[i] = 0;
+    }
+    
+    for (int8_t i = 0; i < 4; i++) {
+        digits[i] = pgm_read_byte(&segments[number % 10]);
+        number /= 10;
+        if (number == 0) {
+            break;
+        }
+    }
+
+    send_bytes(0x08, digits[2], digits[1], digits[0]);
+}
 
 void send_bytes(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
 {

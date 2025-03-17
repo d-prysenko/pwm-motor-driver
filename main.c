@@ -32,7 +32,6 @@
 #endif
 
 
-_inline_ void setup_calibration_int(void);
 _inline_ void setup_ignition_int(void);
 _inline_ void setup_sleep_mode(void);
 _inline_ void setup_pwm(void);
@@ -41,9 +40,7 @@ _inline_ void setup_adc(void);
 uint8_t map_temperature_to_duty(uint16_t adc_temperature, uint8_t is_ac_on);
 void set_duty_smoothly(uint8_t duty, uint8_t allow_calibration);
 void calc_adc_temp_borders(void);
-void sleep(void);
-void sleep_disable(void);
-void calibrate(void);
+uint16_t read_temperature(void);
 
 const uint8_t temperature_duty_ac_off_map[] PROGMEM = {
     0x00, // <=90 0%
@@ -71,16 +68,17 @@ const uint8_t temperature_duty_ac_on_map[] PROGMEM = {
 
 const uint8_t afterrun_delay_sec = 10;
 
-uint16_t adc_temperature_90 = 100;
+uint16_t adc_temperature_90 = 0;
 uint16_t adc_temperature_100 = 0;
-uint16_t adc_temperature_1_deg = 1;
+uint16_t adc_temperature_1_deg = 0;
 
 uint8_t duty = 0;
 uint8_t ac_on = 0;
 
-volatile uint8_t calibration_number = 0;
+uint8_t ign_off = 0;
 
-volatile uint8_t ign_off = 0;
+
+uint8_t display_counter = 0;
 
 #define PWM OCR0A
 
@@ -89,7 +87,6 @@ volatile uint8_t ign_off = 0;
 
 // PB0 - pwm                 output
 // PB1 - ignition            input
-// PB3 - calibration button  input pull-up
 // PB4 - temperature         input
 
 
@@ -97,50 +94,13 @@ volatile uint8_t ign_off = 0;
 // ignition int
 ISR (PCINT0_vect) {
     ign_off = bit_is_clear(PINB, PINB1);
-    // ign_off = 0;
 }
 
-void calibrate(void) {
-    uint16_t temp = adc_read();
-
-    if (!calibration_number) {
-        EEPROM_write_uint16(ADDR_TEMPERATURE_90, temp);
-
-        PWM = 100;
-        _delay_ms(2500);
-        PWM = 0;
-
-        UART_PUTS("90 set ");
-        // blink_fast();
-    } else {
-        EEPROM_write_uint16(ADDR_TEMPERATURE_100, temp);
-
-        SET_CPU_FREQ_DIV_2();
-        PWM = 200;
-        _delay_ms(2500);
-        PWM = 0;
-        SET_CPU_FREQ_DIV_1();
-
-        UART_PUTS("100 set ");
-        // blink_slow();
-    }
-
-    UART_PUTU(temp);
-    UART_PUTC(' ');
-    
-    calc_adc_temp_borders();
-
-    calibration_number = !calibration_number;
+void __attribute__ ((noinline)) delay_25ms() {
+    _delay_ms(25);
 }
 
-void on_calibrate_button_pressed(void) {
-    if (bit_is_clear(PINB, PINB3)) {
-        _delay_ms(10);
-        if (bit_is_clear(PINB, PINB3)) {
-            calibrate();
-        }
-    }
-}
+
 
 int main(void) {
     // set frequency divider 1 (9.6 MHz)
@@ -164,7 +124,6 @@ int main(void) {
     PWM = 0;
 
     ign_off = bit_is_clear(PINB, PINB1);
-    // ign_off = 0;
 
     calc_adc_temp_borders();
 
@@ -176,43 +135,67 @@ int main(void) {
     //     set_duty_smoothly(TEN_PERCENT);
     // }
 
-    CLK_OUTPUT();
-    DIO_OUTPUT();
+    // EEPROM_write_uint16(ADDR_TEMPERATURE_90, 63);
+    // EEPROM_write_uint16(ADDR_TEMPERATURE_100, 47);
 
-    DIO_ON();
-    CLK_ON();
+    tm1637_init();
 
-    while (1)
-    {
-        send_bytes(_1, _2, _3, _4);
+    // while (1)
+    // {
+    //     // send_bytes(_1, _2, _3, _4);
 
-        // uint16_t adc_temp = adc_read();
+    //     // for (int8_t i = 0; i < 25; i++)
+    //     // {
+    //     //     send_uint16(EEPROM_read_uint16(ADDR_TEMPERATURE_90), 0);
+    //     //     _delay_ms(200);
+    //     // }
 
-        // uint8_t duty = map_temperature_to_duty(adc_temp, 0);
+    //     // for (int8_t i = 0; i < 25; i++)
+    //     // {
+    //     //     send_uint16(EEPROM_read_uint16(ADDR_TEMPERATURE_100), 0);
+    //     //     _delay_ms(200);
+    //     // }
 
-        _delay_ms(5);
-    }
+    //     for (int8_t i = 0; i < 25; i++)
+    //     {
+    //         uint16_t adc_temp = read_temperature();
+
+    //         send_uint16(adc_temp, 0);
+    //         _delay_ms(200);
+    //     }
+
+    //     for (int8_t i = 0; i < 25; i++)
+    //     {
+    //         uint16_t adc_temp = read_temperature();
+    //         uint8_t duty = map_temperature_to_duty(adc_temp, 0);
+
+    //         send_uint16(duty, 1);
+    //         _delay_ms(200);
+    //     }
+        
+    // }
+
 
     while (1)
     {
         if (ign_off) {
             set_duty_smoothly(duty, 0);
-            // PWM = duty;
             
-            // wait 100 ms for quicker response if ignition will be turned on when doing after run delay
-            for (uint16_t i = 0; (i < afterrun_delay_sec * 10) && ign_off; i++) {
-                _delay_ms(100);
+            // wait 25 ms for quicker response if ignition will be turned on when doing after run delay
+            for (uint16_t i = 0; (i < afterrun_delay_sec * 40) && ign_off; i++) {
+                delay_25ms();
             }
 
             PWM = 0;
-            _delay_ms(1);
+
+            delay_25ms();
 
             if (ign_off) {
                 asm("sleep");
             }
         }
 
-        uint16_t adc_temp = adc_read();
+        uint16_t adc_temp = read_temperature();
         uint8_t ac_on = 0;
 
         UART_PUTU(adc_temp);
@@ -220,24 +203,32 @@ int main(void) {
 
         duty = map_temperature_to_duty(adc_temp, ac_on);
 
+        if (display_counter >= 10) {
+            send_uint16(duty, 1);
+        }
+
+        if (display_counter >= 20) {
+            display_counter = 0;
+        }
+
+        display_counter++;
+
         UART_PUTC('\n');
         UART_PUTC('\r');
 
-        // PWM = duty;
-        // on_calibrate_button_pressed();
         set_duty_smoothly(duty, 1);
 
-        _delay_ms(500);
+        for (int8_t i = 0; i < 5; i++)
+            delay_25ms();
     }
 
     return 0;
 }
 
 void calc_adc_temp_borders(void) {
-    adc_temperature_90 = EEPROM_read_uint16(ADDR_TEMPERATURE_90);
-    adc_temperature_100 = EEPROM_read_uint16(ADDR_TEMPERATURE_100);
-    // adc_temperature_90 = 600;
-    // adc_temperature_100 = 10;
+    adc_temperature_90 = EEPROM_read(ADDR_TEMPERATURE_90 + 1);
+    adc_temperature_100 = EEPROM_read(ADDR_TEMPERATURE_100 + 1);
+
     adc_temperature_1_deg = (adc_temperature_90 - adc_temperature_100) / 10;
 
     if (adc_temperature_1_deg == 0) {
@@ -254,20 +245,9 @@ void setup_ignition_int(void) {
     SET(PCMSK, PCINT1);
 }
 
-void setup_calibration_int(void) {
-    // PB3 - input
-    PB3_INPUT();
-    PB3_PULLUP();
-
-    // SET(PCMSK, PCINT3);
-
-    // int0 enable
-    // GIMSK |= (1 << INT0);
-}
-
 void setup_sleep_mode(void) {
     // Power-down sleep mode
-    POWER_DOWN_SLEEP_MODE();
+    POWER_DOWN_SLEEP_MODE_INLINE();
     SLEEP_ENABLE();
 }
 
@@ -277,34 +257,27 @@ void setup_pwm(void) {
 
     // phase correct pwm
     SET(TCCR0A, WGM00);
-    // UNSET(TCCR0A, WGM01);
-    // UNSET(TCCR0B, WGM02);
 
     // compare output mode
     SET(TCCR0A, COM0A1);
-    // UNSET(TCCR0A, COM0A0);
 
     // clock prescale 1
     SET(TCCR0B, CS00);
-    // UNSET(TCCR0B, CS01);
-    // UNSET(TCCR0B, CS02);
 }
 
 void setup_adc(void) {
     // PB4 - ADC
     SET(ADMUX, MUX1);
-    // UNSET(ADMUX, REFS0);
+    // 1.1 internal reference
+    SET(ADMUX, REFS0);
 
-    // right aligned to use 10-bit ADC
-    // UNSET(ADMUX, ADLAR);
+    // left adjusted to use 8-bit ADC
+    // SET(ADMUX, ADLAR);
 
     // set the prescaler to clock/4
-    // UNSET(ADCSRA, ADPS0);
     SET(ADCSRA, ADPS1);
-    // UNSET(ADCSRA, ADPS2);
 
-    // ADCSRB = 0;
-
+    // disable digital input
     SET(DIDR0, ADC2D);
 
     // enable ADC
@@ -312,46 +285,76 @@ void setup_adc(void) {
 }
 
 uint8_t map_temperature_to_duty(uint16_t adc_temperature, uint8_t is_ac_on) {
+    if (display_counter < 10) {
+        send_uint16(adc_temperature, 0);
+    }
+
     uint8_t duty_index = 0;
 
     if (adc_temperature < adc_temperature_90) {
-        duty_index = (adc_temperature_90 - adc_temperature) / adc_temperature_1_deg;
+        // analog of:
+        // duty_index = (adc_temperature_90 - adc_temperature) / adc_temperature_1_deg;
+        // because we have not hardware divider
+        int16_t temp = adc_temperature_90 - adc_temperature;
+        for (int8_t i = 0; i < 9 && temp > 0; i++) {
+            temp -= adc_temperature_1_deg;
+            duty_index++;
+        }
     }
 
     if (duty_index > 8) {
         duty_index = 8;
     }
 
-    if (is_ac_on) {
-        return pgm_read_byte(&temperature_duty_ac_on_map[duty_index]);
-    }
+    // if (is_ac_on) {
+    //     return pgm_read_byte(&temperature_duty_ac_on_map[duty_index]);
+    // }
     
     UART_PUTU(pgm_read_byte(&temperature_duty_ac_off_map[duty_index]));
     
+    // if (display_counter >= 10 && display_counter < 15) {
+    //     send_uint16_underscore(adc_temperature_90);
+    // }
+    // if (display_counter >= 15 && display_counter < 20) {
+    //     send_uint16_underscore(duty_index);
+    // }
+
     return pgm_read_byte(&temperature_duty_ac_off_map[duty_index]);
 }
 
-void __attribute__ ((noinline)) delay_25ms() {
-    _delay_ms(25);
+uint16_t read_temperature(void) {
+    uint16_t sum = 0;
+    uint16_t min = 1024;
+    uint16_t max = 0;
+
+    uint16_t val;
+
+    for (int8_t i = 0; i < 10; i++)
+    {
+        val = adc_read();
+
+        if (val > max) max = val;
+        if (val < min) min = val;
+
+        sum += val;
+
+        delay_25ms();
+    }
+
+    sum = sum - min - max;
+
+    return sum / 8;
 }
 
 void set_duty_smoothly(uint8_t duty, uint8_t allow_calibration) {
     while (PWM > duty)
     {
-        // if (allow_calibration) {
-        //     on_calibrate_button_pressed();
-        // }
-
         PWM--;
         delay_25ms();
     }
 
     while (PWM < duty)
     {
-        // if (allow_calibration) {
-        //     on_calibrate_button_pressed();
-        // }
-
         PWM++;
         delay_25ms();
     }
