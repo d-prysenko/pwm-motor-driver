@@ -81,7 +81,7 @@
 #define SET_CPU_FREQ_DIV_2() CLKPR = (1 << CLKPCE); \
     CLKPR = (1 << CLKPS0);
 
-
+#define SET_ADC_CLOCK_PRESCALE_128() ADCSRA = ADCSRA | 0b00000111
 
 
 void EEPROM_write(uint8_t ucAddress, uint8_t ucData);
