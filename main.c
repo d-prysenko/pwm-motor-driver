@@ -1,6 +1,6 @@
-#define F_CPU 9600000ul
+#define F_CPU 8000000ul
 
-#define __AVR_ATtiny13__
+#define __AVR_ATmega328P__
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -38,7 +38,7 @@ _inline_ void setup_sleep_mode(void);
 _inline_ void setup_pwm(void);
 _inline_ void setup_adc(void);
 
-uint8_t map_temperature_to_duty(uint8_t adc_temperature, uint8_t is_ac_on);
+uint8_t map_temperature_to_duty(uint16_t adc_temperature, uint8_t is_ac_on);
 void set_duty_smoothly(uint8_t duty);
 void calc_adc_temp_borders(void);
 uint16_t read_temperature(void);
@@ -69,9 +69,9 @@ const uint8_t temperature_duty_ac_on_map[] PROGMEM = {
 
 const uint8_t afterrun_delay_sec = 10;
 
-uint8_t adc_temperature_90 = 225;
-uint8_t adc_temperature_100 = 140;
-uint8_t adc_temperature_1_deg = 10;
+uint16_t adc_temperature_90 = 340;
+uint16_t adc_temperature_100 = 260;
+uint16_t adc_temperature_1_deg = 9;
 
 uint8_t duty = 0;
 uint8_t ac_on = 0;
@@ -82,22 +82,21 @@ uint8_t ign_off = 0;
 uint8_t display_counter = 0;
 
 #define PWM OCR0A
+#define IGN_IS_OFF() bit_is_clear(PIND, PIND4)
 
 #define TEN_PERCENT 25
 #define NINTY_PERCENT 230
 
-// PB0 - pwm                 output
-// PB1 - ignition            input
-// PB4 - temperature         input
+// PD6 - pwm                 output
+// PD4 - ignition            input
+// PC5 - temperature         input
 
 
 // uint8_t adc_temp = 0;
 
-
-
 // ignition int
-ISR (PCINT0_vect) {
-    ign_off = bit_is_clear(PINB, PINB1);
+ISR (PCINT2_vect) {
+    ign_off = IGN_IS_OFF();
 }
 
 // ISR (ADC_vect) {
@@ -117,7 +116,7 @@ void __attribute__ ((noinline)) delay_25ms() {
 
 
 int main(void) {
-    // set frequency divider 1 (9.6 MHz)
+    // set frequency divider 1 (8.0 MHz)
     SET_CPU_FREQ_DIV_1();
     // SET_CPU_FREQ_DIV_2();
 
@@ -131,30 +130,29 @@ int main(void) {
 
     // allow interrupts
     sei();
-
+    // SREG |= 1 << SREG_I;
     // pwm counter - 0, duty - 0
     TCNT0 = 0;
     PWM = 0;
 
-    ign_off = bit_is_clear(PINB, PINB1);
+    ign_off = IGN_IS_OFF();
 
-    EEPROM_write(ADDR_TEMPERATURE_90, 225);
-    EEPROM_write(ADDR_TEMPERATURE_100, 140);
-    EEPROM_write(ADDR_TEMPERATURE_1_DEG, 10);
+    // EEPROM_write(ADDR_TEMPERATURE_90, 225);
+    // EEPROM_write(ADDR_TEMPERATURE_100, 140);
+    // EEPROM_write(ADDR_TEMPERATURE_1_DEG, 10);
 
-    calc_adc_temp_borders();
-
+    // calc_adc_temp_borders();
+    
     // PWM = TEN_PERCENT;
-
-    while (1)
-    {
-        set_duty_smoothly(NINTY_PERCENT);
-        set_duty_smoothly(TEN_PERCENT);
-    }
-
-
-
+    
     tm1637_init();
+
+    // while (1)
+    // {
+    //     set_duty_smoothly(NINTY_PERCENT);
+    //     set_duty_smoothly(TEN_PERCENT);
+    // }
+
 
     // while (1)
     // {
@@ -194,41 +192,43 @@ int main(void) {
 
     while (1)
     {
-        // if (ign_off) {
-        //     set_duty_smoothly(duty);
+        if (ign_off) {
+            send_bytes(_D, _E, _L, _A);
+            set_duty_smoothly(duty);
             
-        //     // wait 25 ms for quicker response if ignition will be turned on when doing after run delay
-        //     for (uint16_t i = 0; (i < afterrun_delay_sec * 40) && ign_off; i++) {
-        //         delay_25ms();
-        //     }
+            // wait 25 ms for quicker response if ignition will be turned on when doing after run delay
+            for (uint16_t i = 0; (i < afterrun_delay_sec * 40) && ign_off; i++) {
+                delay_25ms();
+            }
 
-        //     PWM = 0;
+            PWM = 0;
 
-        //     delay_25ms();
+            delay_25ms();
 
-        //     if (ign_off) {
-        //         UNSET(ADCSRA, ADEN);
-        //         POWER_DOWN_SLEEP_MODE();
-        //         asm("sleep");
-        //         SET(ADCSRA, ADEN);
-        //     }
-        // }
+            if (ign_off) {
+                send_bytes(0, 0, 0, 0);
+                DISABLE_ADC();
+                POWER_DOWN_SLEEP_MODE();
+                asm("sleep");
+                ENABLE_ADC();
+            }
+        }
 
         // adc_read();
         uint16_t adc_temp_16 = read_temperature();
 
-        if (adc_temp_16 < 50) {
-            adc_temp_16 = 0;
-        } else {
-            adc_temp_16 -= 50;
-        }
+        // if (adc_temp_16 < 50) {
+        //     adc_temp_16 = 0;
+        // } else {
+        //     adc_temp_16 -= 50;
+        // }
 
-        uint8_t adc_temp = (adc_temp_16 > 255) ? 255 : (uint8_t)adc_temp_16;
+        // uint8_t adc_temp = (adc_temp_16 > 255) ? 255 : (uint8_t)adc_temp_16;
 
         // uint16_t temp = adc_read();
 
-        if (display_counter < 10) {
-            send_uint16(adc_temp, 0);
+        if (display_counter < 5) {
+            send_uint16(adc_temp_16, 0);
         }
 
         uint8_t ac_on = 0;
@@ -236,13 +236,13 @@ int main(void) {
         // UART_PUTU(adc_temp);
         // UART_PUTC(' ');
     
-        duty = map_temperature_to_duty(adc_temp, ac_on);
+        duty = map_temperature_to_duty(adc_temp_16, ac_on);
     
-        if (display_counter >= 10) {
+        if (display_counter >= 5) {
             send_uint16(duty, 1);
         }
     
-        if (display_counter >= 15) {
+        if (display_counter >= 10) {
             display_counter = 0;
         }
     
@@ -262,24 +262,26 @@ int main(void) {
 }
 
 void calc_adc_temp_borders(void) {
-    adc_temperature_90 = EEPROM_read(ADDR_TEMPERATURE_90);
-    adc_temperature_100 = EEPROM_read(ADDR_TEMPERATURE_100);
-    adc_temperature_1_deg = EEPROM_read(ADDR_TEMPERATURE_1_DEG);
+//     adc_temperature_90 = EEPROM_read(ADDR_TEMPERATURE_90);
+//     adc_temperature_100 = EEPROM_read(ADDR_TEMPERATURE_100);
+//     adc_temperature_1_deg = EEPROM_read(ADDR_TEMPERATURE_1_DEG);
 
-    // adc_temperature_1_deg = (adc_temperature_90 - adc_temperature_100) / 10;
+//     // adc_temperature_1_deg = (adc_temperature_90 - adc_temperature_100) / 10;
 
-    // if (adc_temperature_1_deg == 0) {
-    //     adc_temperature_1_deg = 1;
-    // }
+//     // if (adc_temperature_1_deg == 0) {
+//     //     adc_temperature_1_deg = 1;
+//     // }
 }
 
 void setup_ignition_int(void) {
-    // PB1 - input
-    PB1_INPUT();
+    // PD4 - input
+    PD4_INPUT();
 
-    // int
-    SET(GIMSK, PCIE);
-    SET(PCMSK, PCINT1);
+    // int on 16-23 pins
+    SET(PCICR, PCIE2);
+
+    // only PCINT20 - PD4 pin
+    SET(PCMSK2, PCINT20);
 }
 
 void setup_sleep_mode(void) {
@@ -289,8 +291,8 @@ void setup_sleep_mode(void) {
 }
 
 void setup_pwm(void) {
-    // PB0 - output
-    PB0_OUTPUT();
+    // PD6 - output
+    PD6_OUTPUT();
 
     // phase correct pwm
     SET(TCCR0A, WGM00);
@@ -299,14 +301,15 @@ void setup_pwm(void) {
     SET(TCCR0A, COM0A1);
 
     // clock prescale 1
-    SET(TCCR0B, CS00);
+    SET_PWM_PRESCALE_1();
 }
 
 void setup_adc(void) {
-    // PB4 - ADC
-    SET(ADMUX, MUX1);
+    // ADC5 - ADC - PC5
+    SET(ADMUX, MUX0);
+    SET(ADMUX, MUX2);
     // 1.1 internal reference
-    SET(ADMUX, REFS0);
+    SET_ADC_1_1_REFERENCE();
 
     // left adjusted to use 8-bit ADC
     // SET(ADMUX, ADLAR);
@@ -318,13 +321,13 @@ void setup_adc(void) {
     // SET(ADCSRA, ADIE);
 
     // disable digital input
-    SET(DIDR0, ADC2D);
+    SET(DIDR0, ADC5D);
 
     // enable ADC
-    SET(ADCSRA, ADEN);
+    ENABLE_ADC();
 }
 
-uint8_t map_temperature_to_duty(uint8_t adc_temperature, uint8_t is_ac_on) {
+uint8_t map_temperature_to_duty(uint16_t adc_temperature, uint8_t is_ac_on) {
     // if (display_counter < 10) {
     //     send_uint16(adc_temperature, 0);
     // }
@@ -335,11 +338,12 @@ uint8_t map_temperature_to_duty(uint8_t adc_temperature, uint8_t is_ac_on) {
         // analog of:
         // duty_index = (adc_temperature_90 - adc_temperature) / adc_temperature_1_deg;
         // because we have not hardware divider and don't trust pseudo int16 and __udivmodhi4
-        uint8_t temp = adc_temperature_90 - adc_temperature;
-        for (int8_t i = 0; i < 9 && temp >= adc_temperature_1_deg; i++) {
-            temp -= adc_temperature_1_deg;
-            duty_index++;
-        }
+        // uint8_t temp = adc_temperature_90 - adc_temperature;
+        // for (int8_t i = 0; i < 9 && temp >= adc_temperature_1_deg; i++) {
+        //     temp -= adc_temperature_1_deg;
+        //     duty_index++;
+        // }
+        duty_index = (adc_temperature_90 - adc_temperature) / adc_temperature_1_deg;
     }
 
     if (duty_index > 8) {
@@ -401,12 +405,20 @@ uint16_t read_temperature(void) {
 void set_duty_smoothly(uint8_t duty) {
     while (PWM > duty)
     {
+        // uint16_t adc_temp_16 = read_temperature();
+
+        // send_uint16(adc_temp_16, 0);
+
         PWM--;
         delay_25ms();
     }
 
     while (PWM < duty)
     {
+        // uint16_t adc_temp_16 = read_temperature();
+
+        // send_uint16(adc_temp_16, 0);
+
         PWM++;
         delay_25ms();
     }

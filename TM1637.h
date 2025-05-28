@@ -28,26 +28,26 @@ void __attribute__ ((noinline)) clk_off();
 void __attribute__ ((noinline)) dio_on();
 void __attribute__ ((noinline)) dio_off();
 
-#define CLK_INPUT() PB3_INPUT()
-#define CLK_OUTPUT() PB3_OUTPUT()
-#define CLK_PULLUP() PB3_PULLUP()
-#define CLK_PULLUP_OFF() PB3_PULLUP_OFF()
-#define CLK_ON_IMMEDIATELY() PB3_ON()
-#define CLK_OFF_IMMEDIATELY() PB3_OFF()
+#define CLK_INPUT() PB0_INPUT()
+#define CLK_OUTPUT() PB0_OUTPUT()
+#define CLK_PULLUP() PB0_PULLUP()
+#define CLK_PULLUP_OFF() PB0_PULLUP_OFF()
+#define CLK_ON_IMMEDIATELY() PB0_ON()
+#define CLK_OFF_IMMEDIATELY() PB0_OFF()
 #define CLK_ON() clk_on()
 #define CLK_OFF() clk_off()
-#define CLK_STATE() PB3_STATE()
+#define CLK_STATE() PB0_STATE()
 
 
-#define DIO_INPUT() PB2_INPUT()
-#define DIO_OUTPUT() PB2_OUTPUT()
-#define DIO_PULLUP() PB2_PULLUP()
-#define DIO_PULLUP_OFF() PB2_PULLUP_OFF()
-#define DIO_ON_IMMEDIATELY() PB2_ON()
-#define DIO_OFF_IMMEDIATELY() PB2_OFF()
+#define DIO_INPUT() PD7_INPUT()
+#define DIO_OUTPUT() PD7_OUTPUT()
+#define DIO_PULLUP() PD7_PULLUP()
+#define DIO_PULLUP_OFF() PD7_PULLUP_OFF()
+#define DIO_ON_IMMEDIATELY() PD7_ON()
+#define DIO_OFF_IMMEDIATELY() PD7_OFF()
 #define DIO_ON() dio_on()
 #define DIO_OFF() dio_off()
-#define DIO_STATE() PB2_STATE()
+#define DIO_STATE() PD7_STATE()
 
 
 #define _0 0x3f
@@ -61,6 +61,13 @@ void __attribute__ ((noinline)) dio_off();
 #define _8 0x7f
 #define _9 0x6f
 
+#define _S 0x6d
+#define _L 0x38
+#define _E 0x79
+#define _P 0x73
+
+#define _D 0x5e
+#define _A 0x77
 
 static inline void tm1637_init(void)
 {

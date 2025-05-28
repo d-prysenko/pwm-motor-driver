@@ -1,5 +1,5 @@
 # GCC = avr-gcc -Wall -Os -g -mmcu=attiny13a
-GCC = avr-gcc -Wall -Os -Wl,--gc-sections -ffunction-sections -g -mmcu=attiny13a
+GCC = avr-gcc -Wall -Os -Wl,--gc-sections -ffunction-sections -g -mmcu=atmega328p
 OBJCOPY = avr-objcopy -j .text -j .data -O ihex
 
 
@@ -9,5 +9,5 @@ all:
 
 flash:
 	avrdude -c usbasp -B 125kHz -p t13 -V -U flash:w:main.hex:i
-	# ..\avrdude\avrdude.exe -c usbasp -B 125kHz -p t13 -U flash:w:main.hex:i
+	# ..\avrdude\avrdude.exe -c usbasp -B 125kHz -p m328p -U flash:w:main.hex:i
 	# AVRDUDE	-U lfuse:w:0x2A:m	-U hfuse:w:0xFF:m	-U lock:w:0xFF:m
